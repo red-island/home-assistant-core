@@ -4145,6 +4145,12 @@
       "config_flow": true,
       "iot_class": "cloud_polling"
     },
+    "presence_simulator": {
+      "name": "Presence Simulator",
+      "integration_type": "hub",
+      "config_flow": true,
+      "iot_class": "calculated"
+    },
     "profiler": {
       "name": "Profiler",
       "integration_type": "hub",

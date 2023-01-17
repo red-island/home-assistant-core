@@ -892,6 +892,8 @@ build.json @home-assistant/supervisor
 /tests/components/poolsense/ @haemishkyd
 /homeassistant/components/powerwall/ @bdraco @jrester
 /tests/components/powerwall/ @bdraco @jrester
+/homeassistant/components/presence_simulator/ @red-island
+/tests/components/presence_simulator/ @red-island
 /homeassistant/components/profiler/ @bdraco
 /tests/components/profiler/ @bdraco
 /homeassistant/components/progettihwsw/ @ardaseremet

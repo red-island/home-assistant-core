@@ -1,0 +1,38 @@
+{
+    "title": "Presence Simulator",
+    "config": {
+        "abort": {
+            "already_configured": "The instance is already configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "title": "Choose a name for the Presence Simulator instance",
+                "description": "Pick a name for this instance. You can run several instances of Presence Simulator!",
+                "data": {
+                    "name": "Name"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Presence Simulator options",
+                "description": "All settings for the Presence Simulator component. Option names correspond with YAML settings. No options are shown if you have the presence_simulator entry defined in your YAML configuration.",
+                "data": {
+                "lights": "lights",
+                "interval": "interval - Run every x seconds"
+                }
+            },
+            "error": {
+                "option_error": "Invalid option",
+                "entity_missing": "One or more selected entities are missing in Home Assistant"
+            }
+        }
+    }
+}
