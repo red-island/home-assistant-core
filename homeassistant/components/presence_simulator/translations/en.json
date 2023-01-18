@@ -25,8 +25,12 @@
                 "title": "Presence Simulator options",
                 "description": "All settings for the Presence Simulator component. Option names correspond with YAML settings. No options are shown if you have the presence_simulator entry defined in your YAML configuration.",
                 "data": {
-                "lights": "lights",
-                "interval": "interval - Run every x seconds"
+                    "automation": "automation -",
+                    "lights": "lights",
+                    "interval": "interval - Run every x seconds",
+                    "playback_automation": "playback_automation - Shall past automations be played back",
+                    "playback_days": "playback_days - which day in the past shall be re-played",
+                    "automation_filter": "automation_filter - which character need to exist in automation name e.g. %light*"
                 }
             },
             "error": {

@@ -12,7 +12,7 @@ from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 
 from .const import CONF_LIGHTS, DOMAIN, EXTRA_VALIDATION, NONE_STR, VALIDATION_TUPLES
-from .switch import _supported_features, validate
+from .switch import _supported_features
 
 # from typing import Any
 
@@ -84,7 +84,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         """Handle options flow."""
         conf = self.config_entry
-        data = validate(conf)
+        # data = validate(conf)
         if conf.source == config_entries.SOURCE_IMPORT:
             return self.async_show_form(step_id="init", data_schema=None)
         errors = {}
@@ -98,15 +98,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             for light in self.hass.states.async_entity_ids("light")
             if _supported_features(self.hass, light)
         ]
-        for configured_light in data[CONF_LIGHTS]:
-            if configured_light not in all_lights:
-                errors = {CONF_LIGHTS: "entity_missing"}
-                _LOGGER.error(
-                    "%s: light entity %s is configured, but was not found",
-                    data[CONF_NAME],
-                    configured_light,
-                )
-                all_lights.append(configured_light)
+
+        # for configured_light in data[CONF_LIGHTS]:
+        #     if configured_light not in all_lights:
+        #         errors = {CONF_LIGHTS: "entity_missing"}
+        #         _LOGGER.error(
+        #             "%s: light entity %s is configured, but was not found",
+        #             data[CONF_NAME],
+        #             configured_light,
+        #         )
+        all_lights.append("configured_light")
+        all_lights.append("configured_light2")
+        all_lights.append("configured_light3")
+        all_lights.append("configured_light4")
+
         to_replace = {CONF_LIGHTS: cv.multi_select(sorted(all_lights))}
 
         options_schema = {}

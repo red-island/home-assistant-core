@@ -8,6 +8,7 @@ import logging
 
 from homeassistant.components.light import ColorMode, LightEntityFeature
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_SUPPORTED_FEATURES
 from homeassistant.core import Context, Event, HomeAssistant
 
 from .const import EXTRA_VALIDATION, VALIDATION_TUPLES, replace_none_str
@@ -94,4 +95,8 @@ def _supported_features(hass: HomeAssistant, light: str):
     if not state:
         _LOGGER.error("Entity does not exists")
         return
-    return state.attributes
+    supported_features = state.attributes[ATTR_SUPPORTED_FEATURES]
+    supported = {
+        key for key, value in _SUPPORT_OPTS.items() if supported_features & value
+    }
+    return supported

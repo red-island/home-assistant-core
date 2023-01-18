@@ -3,16 +3,20 @@
 # from homeassistant.helpers import selector
 import voluptuous as vol
 
-from homeassistant.components import light
+# from homeassistant.components import light
 import homeassistant.helpers.config_validation as cv
 
 DOMAIN = "presence_simulator"
 NONE_STR = "None"
 
-CONF_LIGHTS, DEFAULT_LIGHTS = "lights", [light.LightEntity]
-CONF_MAX_DAYS, DEFAULT_MAX_DAYS = "max_days", 100
-CONF_MIN_DAYS, DEFAULT_MIN_DAYS = "min_days", 1
+CONF_LIGHTS, DEFAULT_LIGHTS = "lights", [str]  # [light.LightEntity]
 CONF_INTERVAL, DEFAULT_INTERVAL = "interval", 300
+CONF_PLAYBACK_AUTOMATIONS, DEFAULT_PLAYBACK_AUTOMATIONS = "playback_automation", True
+CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS = "playback_days", 7
+CONF_AUTOMATION_FILTER, DEFAULT_AUTOMATION_FILTER = (
+    "automation_filter",
+    "%zigbee2mqtt/Feller%",
+)
 
 
 def int_between(min_int, max_int):
@@ -21,8 +25,10 @@ def int_between(min_int, max_int):
 
 
 VALIDATION_TUPLES = [
-    (CONF_LIGHTS, DEFAULT_LIGHTS, cv.entity_ids),
-    (CONF_MIN_DAYS, CONF_MAX_DAYS, int_between(1, 100)),
+    # (CONF_LIGHTS, DEFAULT_LIGHTS, cv.entity_ids), selector
+    (CONF_PLAYBACK_AUTOMATIONS, CONF_PLAYBACK_AUTOMATIONS, cv.boolean),
+    (CONF_AUTOMATION_FILTER, DEFAULT_AUTOMATION_FILTER, cv.string),
+    (CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS, int_between(1, 14)),
     (CONF_INTERVAL, DEFAULT_INTERVAL, cv.positive_int),
 ]
 
