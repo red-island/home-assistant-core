@@ -9,7 +9,20 @@ from .const import DOMAIN
 
 # TOD List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
-PLATFORMS: list[Platform] = [Platform.LIGHT]
+PLATFORMS: list[Platform] = [Platform.SWITCH]
+
+
+# async def async_setup(hass: HomeAssistant, config: dict[str, Any]):
+#     """Import integration from config."""
+
+#     if DOMAIN in config:
+#         for entry in config[DOMAIN]:
+#             hass.async_create_task(
+#                 hass.config_entries.flow.async_init(
+#                     DOMAIN, context={CONF_SOURCE: SOURCE_IMPORT}, data=entry
+#                 )
+#             )
+#     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
