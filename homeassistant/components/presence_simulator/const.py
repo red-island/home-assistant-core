@@ -7,6 +7,7 @@ import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 
 DOMAIN = "presence_simulator"
+ICON = "mdi:theme-light-dark"
 NONE_STR = "None"
 
 CONF_LIGHTS, DEFAULT_LIGHTS = "lights", [str]  # [light.LightEntity]
@@ -31,6 +32,10 @@ VALIDATION_TUPLES = [
     (CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS, int_between(1, 14)),
     (CONF_INTERVAL, DEFAULT_INTERVAL, cv.positive_int),
 ]
+
+ATTR_TURN_ON_OFF_LISTENER = "turn_on_off_listener"
+SERVICE_APPLY = "apply"
+UNDO_UPDATE_LISTENER = "update_listener"
 
 
 def replace_none_str(value, replace_with=None):
