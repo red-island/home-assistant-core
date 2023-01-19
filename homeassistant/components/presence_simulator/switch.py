@@ -442,9 +442,7 @@ class SimpleSwitch(SwitchEntity, RestoreEntity):
 
 
 def get_entities_from_event(hass: HomeAssistant, domain, service_data):
-    """Turn off Presence Simulator sleep mode."""
-
-    # """Converts service data to list if entity ids."""
+    """Return ist of entity_ids related to event."""
 
     if ATTR_ENTITY_ID in service_data:
         entity_ids = cv.ensure_list_csv(service_data[ATTR_ENTITY_ID])
