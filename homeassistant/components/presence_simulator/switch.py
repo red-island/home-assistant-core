@@ -5,6 +5,7 @@ import asyncio
 import base64
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+import json
 import logging
 import sqlite3
 from typing import Any
@@ -48,6 +49,7 @@ import homeassistant.util.dt as dt_util
 from .const import (
     ATTR_TURN_ON_OFF_LISTENER,
     CONF_AUTOMATION_FILTER,
+    CONF_AUTOMATIONS,
     CONF_INTERVAL,
     DOMAIN,
     EXTRA_VALIDATION,
@@ -227,6 +229,7 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         # self.sleep_mode_switch = sleep_mode_switch
 
         data = validate(entry)
+        self._data = data
         self._name = data[CONF_NAME]
         self._interval = data[CONF_INTERVAL]
         self._suto_filter = data[CONF_AUTOMATION_FILTER]
@@ -377,18 +380,7 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         )
 
         days_back = 0
-
-        conn = sqlite3.connect(
-            f"{self.hass.config.config_dir}/home-assistant_v2.db",
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
-        cursor = conn.cursor()
-
-        # schema_version = _schema_version(hass)
-        # if schema_version >= 31:
-
         current_utc = datetime.now(timezone.utc)
-
         from_time_uts = dt_util.utc_to_timestamp(
             current_utc + timedelta(days=-days_back, minutes=-1)
         )
@@ -397,12 +389,20 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         )
 
         #   filter = self._settings.get
+
+        conn = sqlite3.connect(
+            f"{self.hass.config.config_dir}/home-assistant_v2.db",
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+        )
+        cursor = conn.cursor()
+
+        # schema_version = _schema_version(hass)  # if schema_version >= 31:
         result = cursor.execute(
             "Select shared_data, time_fired_ts from event_data inner join events e on event_data.data_id = e.data_id \
                 where json_extract(shared_data, '$.entity_id') LIKE 'automation.%' \
-                AND time_fired_ts > %s\
-                AND time_fired_ts < %s",
-            (from_time_uts, to_time_uts),
+                AND time_fired_ts > ?\
+                AND time_fired_ts < ?",
+            [from_time_uts, to_time_uts],
         )
 
         # {"domain":"automation","service":"trigger","service_data":{"entity_id":"automation.auto_licht_bad","skip_condition":true}}
@@ -410,11 +410,19 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
 
         for shared_data, time in result:
             time_fired = dt_util.utc_from_timestamp(time)
-            _LOGGER.debug(
-                "%s: Database call from '_async_update_at_interval', records are '%s'",
-                time_fired,
-                shared_data,
-            )
+            message = json.loads(shared_data)
+            if message["entity_id"] in self._data[CONF_AUTOMATIONS]:
+                _LOGGER.debug(
+                    "%s: MATCH, record is '%s'",
+                    time_fired,
+                    message,
+                )
+            else:
+                _LOGGER.debug(
+                    "%s: NOT enabled '%s'",
+                    time_fired,
+                    message,
+                )
 
         return
 

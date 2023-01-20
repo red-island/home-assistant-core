@@ -3,14 +3,15 @@
 # from homeassistant.helpers import selector
 import voluptuous as vol
 
-# from homeassistant.components import light
+from homeassistant.components import automation, light
 import homeassistant.helpers.config_validation as cv
 
 DOMAIN = "presence_simulator"
 ICON = "mdi:theme-light-dark"
 NONE_STR = "None"
 
-CONF_LIGHTS, DEFAULT_LIGHTS = "lights", [str]  # [light.LightEntity]
+CONF_LIGHTS, DEFAULT_LIGHTS = "lights", [light.LightEntity]  # [light.LightEntity]
+CONF_AUTOMATIONS, DEFAULT_AUTOMATIONS = "automations", [automation.AutomationEntity]
 CONF_INTERVAL, DEFAULT_INTERVAL = "interval", 1
 CONF_PLAYBACK_AUTOMATIONS, DEFAULT_PLAYBACK_AUTOMATIONS = "playback_automation", True
 CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS = "playback_days", 7
@@ -26,9 +27,10 @@ def int_between(min_int, max_int):
 
 
 VALIDATION_TUPLES = [
-    # (CONF_LIGHTS, DEFAULT_LIGHTS, cv.entity_ids), selector
+    (CONF_AUTOMATIONS, DEFAULT_AUTOMATIONS, cv.entity_ids),
     (CONF_PLAYBACK_AUTOMATIONS, CONF_PLAYBACK_AUTOMATIONS, cv.boolean),
     (CONF_AUTOMATION_FILTER, DEFAULT_AUTOMATION_FILTER, cv.string),
+    # (CONF_LIGHTS, DEFAULT_LIGHTS, cv.entity_ids),
     (CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS, int_between(1, 14)),
     (CONF_INTERVAL, DEFAULT_INTERVAL, cv.positive_int),
 ]
