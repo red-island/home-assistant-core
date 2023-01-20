@@ -4,8 +4,9 @@ from __future__ import annotations
 import asyncio
 import base64
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
+import sqlite3
 from typing import Any
 
 import voluptuous as vol
@@ -36,12 +37,18 @@ from homeassistant.core import Context, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_platform
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import (  # async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.template import area_entities
 from homeassistant.util import slugify
+import homeassistant.util.dt as dt_util
 
 from .const import (
     ATTR_TURN_ON_OFF_LISTENER,
+    CONF_AUTOMATION_FILTER,
+    CONF_INTERVAL,
     DOMAIN,
     EXTRA_VALIDATION,
     ICON,
@@ -221,6 +228,8 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
 
         data = validate(entry)
         self._name = data[CONF_NAME]
+        self._interval = data[CONF_INTERVAL]
+        self._suto_filter = data[CONF_AUTOMATION_FILTER]
 
         # Set other attributes
         self._icon = ICON
@@ -239,7 +248,7 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         self._settings: dict[str, Any] = {}
 
         # Set and unset tracker in async_turn_on and async_turn_off
-        self.remove_listeners = [str]
+        self.remove_listeners = [Any]
         _LOGGER.debug(
             "%s: entry.data: '%s', entry.options: '%s', converted to '%s'",
             self._name,
@@ -292,18 +301,18 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
             _LOGGER.debug("%s: Cancelled '_setup_listeners'", self._name)
             return
 
-        assert not self.remove_listeners
+        # assert not self.remove_listeners
 
-        # remove_interval = async_track_time_interval(
-        #     self.hass, self._async_update_at_interval, self._interval
-        # )
+        remove_interval = async_track_time_interval(
+            self.hass, self._async_update_at_interval, self._interval
+        )
 
-        # self.remove_listeners.extend([remove_interval, remove_sleep])
+        self.remove_listeners.extend([remove_interval])
 
     def _remove_listeners(self) -> None:
         while self.remove_listeners:
-            remove_listener = self.remove_listeners.pop()
-            remove_listener()
+            self.remove_listeners.pop()  # remove_listener = self.remove_listeners.pop()
+            # remove_listener()
 
     @property
     def icon(self) -> str:
@@ -315,7 +324,7 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         """Return the attributes of the switch."""
         if not self.is_on:
             return {key: None for key in self._settings}
-        manual_control = [str]
+        manual_control = [""]
         # manual_control = [
         #     light
         #     for light in self._lights
@@ -361,12 +370,53 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         # self.turn_on_off_listener.reset(*self._lights)
 
     async def _async_update_at_interval(self, now=None) -> None:
+        _LOGGER.debug(
+            "%s: Called '_async_update_at_interval', current state is '%s'",
+            self._name,
+            self._state,
+        )
+
+        days_back = 0
+
+        conn = sqlite3.connect(
+            f"{self.hass.config.config_dir}/home-assistant_v2.db",
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+        )
+        cursor = conn.cursor()
+
+        # schema_version = _schema_version(hass)
+        # if schema_version >= 31:
+
+        current_utc = datetime.now(timezone.utc)
+
+        from_time_uts = dt_util.utc_to_timestamp(
+            current_utc + timedelta(days=-days_back, minutes=-1)
+        )
+        to_time_uts = dt_util.utc_to_timestamp(
+            current_utc + timedelta(days=-days_back, minutes=0)
+        )
+
+        #   filter = self._settings.get
+        result = cursor.execute(
+            "Select shared_data, time_fired_ts from event_data inner join events e on event_data.data_id = e.data_id \
+                where json_extract(shared_data, '$.entity_id') LIKE 'automation.%' \
+                AND time_fired_ts > %s\
+                AND time_fired_ts < %s",
+            (from_time_uts, to_time_uts),
+        )
+
+        # {"domain":"automation","service":"trigger","service_data":{"entity_id":"automation.auto_licht_bad","skip_condition":true}}
+        # shared_data like "%automation.%licht%" AND
+
+        for shared_data, time in result:
+            time_fired = dt_util.utc_from_timestamp(time)
+            _LOGGER.debug(
+                "%s: Database call from '_async_update_at_interval', records are '%s'",
+                time_fired,
+                shared_data,
+            )
+
         return
-        # await self._update_attrs_and_maybe_adapt_lights(
-        #     transition=self._transition,
-        #     force=False,
-        #     context=self.create_context("interval"),
-        # )
 
     async def _sleep_mode_switch_state_event(self, event: Event) -> None:
         if not match_switch_state_event(event, [STATE_ON, STATE_OFF]):
