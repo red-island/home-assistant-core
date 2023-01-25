@@ -1,6 +1,8 @@
 """The Presence Simulator integration."""
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_SOURCE, Platform
 from homeassistant.core import HomeAssistant
@@ -8,13 +10,16 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, UNDO_UPDATE_LISTENER
 
-# TOD List the platforms that you want to support.
+# List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
 PLATFORMS: list[Platform] = [Platform.SWITCH]
 
+# Logger
+_LOGGER = logging.getLogger(__name__)
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Import integration from config."""
+    """Import integration from YAML config."""
 
     if DOMAIN in config:
         for entry in config[DOMAIN]:
@@ -27,17 +32,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Presence Simulator from a config entry."""
+    """Set up Presence Simulator using config flow."""
+    _LOGGER.debug("async setup entry")
 
     hass.data.setdefault(DOMAIN, {})
-    # TOD 1. Create API instance
-    # TOD 2. Validate the API connection (and authentication)
-    # TOD 3. Store an API object for your platforms to access
-    # hass.data[DOMAIN][entry.entry_id] = MyApi(...)
 
     data = hass.data.setdefault(DOMAIN, {})
-    undo_listener = entry.add_update_listener(async_update_options)
-    data[entry.entry_id] = {UNDO_UPDATE_LISTENER: undo_listener}
+    update_listener = entry.add_update_listener(async_update_options)
+    data[entry.entry_id] = {UNDO_UPDATE_LISTENER: update_listener}
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -45,7 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_update_options(hass, entry: ConfigEntry):
-    """Update options."""
+    """Reload component after options update."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 

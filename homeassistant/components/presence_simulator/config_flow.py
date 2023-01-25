@@ -7,8 +7,10 @@ import logging
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 
 from .const import (
@@ -19,7 +21,7 @@ from .const import (
     NONE_STR,
     VALIDATION_TUPLES,
 )
-from .switch import validate
+from .switch import _supported_features, validate
 
 # from typing import Any
 
@@ -32,14 +34,14 @@ from .switch import validate
 _LOGGER = logging.getLogger(__name__)
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Adaptive Lighting."""
+class PresenceSimulatorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Presence Simulator."""
 
     VERSION = 1
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle the initial step."""
-        errors = {}
+        errors: dict[str, str] = {}
 
         if user_input is not None:
             await self.async_set_unique_id(user_input[CONF_NAME])
@@ -52,18 +54,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_import(self, user_input=None):
-        """Handle configuration by yaml file."""
+    async def async_step_import(self, user_input=None) -> FlowResult:
+        """Handle configuration by YAML file."""
+
         await self.async_set_unique_id(user_input[CONF_NAME])
-        for entry in self._async_current_entries():
-            if entry.unique_id == self.unique_id:
-                self.hass.config_entries.async_update_entry(entry, data=user_input)
+        for config_entry in self._async_current_entries():
+            if config_entry.unique_id == self.unique_id:
+                self.hass.config_entries.async_update_entry(
+                    config_entry, data=user_input
+                )
                 self._abort_if_unique_id_configured()
         return self.async_create_entry(title=user_input[CONF_NAME], data=user_input)
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlowHandler:
         """Get the options flow for this handler."""
         return OptionsFlowHandler(config_entry)
 
@@ -82,24 +87,26 @@ def validate_options(user_input, errors):
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle a option flow for Adaptive Lighting."""
+    """Handle a option flow for Presence Simulator."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(self, user_input=None) -> FlowResult:
         """Handle options flow."""
         conf = self.config_entry
         data = validate(conf)
         if conf.source == config_entries.SOURCE_IMPORT:
             return self.async_show_form(step_id="init", data_schema=None)
-        errors = {}
+
+        errors: dict[str, str] = {}
         if user_input is not None:
             validate_options(user_input, errors)
             if not errors:
                 return self.async_create_entry(title="", data=user_input)
 
+        # automations
         all_automation = self.hass.states.async_entity_ids("automation")
         for configured_automation in data[CONF_AUTOMATIONS]:
             if configured_automation not in all_automation:
@@ -110,27 +117,33 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     configured_automation,
                 )
 
-        # all_lights = [
-        #     light
-        #     for light in self.hass.states.async_entity_ids("light")
-        #     if _supported_features(self.hass, light)
-        # ]
-        # for configured_light in data[CONF_LIGHTS]:
-        #     if configured_light not in all_lights:
-        #         errors = {CONF_LIGHTS: "entity_missing"}
-        #         _LOGGER.error(
-        #             "%s: light entity %s is configured, but was not found",
-        #             data[CONF_NAME],
-        #             configured_light,
-        #         )
-        # all_lights.append("configured_light")
-        # all_lights.append("configured_light2")
-        # all_lights.append("configured_light3")
-        # all_lights.append("configured_light4")
+        # lights
+        all_lights = [
+            light
+            for light in self.hass.states.async_entity_ids("light")
+            if _supported_features(self.hass, light)
+        ]
+        for configured_light in data[CONF_LIGHTS]:
+            if configured_light not in all_lights:
+                errors = {CONF_LIGHTS: "entity_missing"}
+                _LOGGER.error(
+                    "%s: light entity %s is configured, but was not found",
+                    data[CONF_NAME],
+                    configured_light,
+                )
+        all_lights.append("configured_light")
+        all_lights.append("configured_light2")
+        all_lights.append("configured_light3")
+        all_lights.append("configured_light4")
+        all_lights.append("configured_light5")
+        all_lights.append("configured_light6")
+        all_lights.append("configured_light7")
+        all_lights.append("configured_light8")
+        all_lights.append("configured_light9")
 
         to_replace = {
             CONF_AUTOMATIONS: cv.multi_select(sorted(all_automation)),
-            CONF_LIGHTS: cv.multi_select(sorted(all_automation)),
+            CONF_LIGHTS: cv.multi_select(sorted(all_lights)),
         }
 
         options_schema = {}

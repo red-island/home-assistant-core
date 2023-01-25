@@ -5,9 +5,7 @@ import asyncio
 import base64
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-import json
 import logging
-import sqlite3
 from typing import Any
 
 import voluptuous as vol
@@ -17,6 +15,7 @@ from homeassistant.components.light import (
     ColorMode,
     LightEntityFeature,
 )
+from homeassistant.components.recorder import get_instance, history
 from homeassistant.components.switch import SwitchEntity  # , DOMAIN as SWITCH_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (  # EVENT_STATE_CHANGED,
@@ -38,9 +37,7 @@ from homeassistant.core import Context, Event, HomeAssistant, ServiceCall
 from homeassistant.helpers import entity_platform
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import (  # async_track_state_change_event,
-    async_track_time_interval,
-)
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.template import area_entities
 from homeassistant.util import slugify
@@ -48,9 +45,11 @@ import homeassistant.util.dt as dt_util
 
 from .const import (
     ATTR_TURN_ON_OFF_LISTENER,
-    CONF_AUTOMATION_FILTER,
     CONF_AUTOMATIONS,
+    CONF_AUTOMATIONS_FILTER,
     CONF_INTERVAL,
+    CONF_LIGHTS,
+    CONF_LIGHTS_FILTER,
     DOMAIN,
     EXTRA_VALIDATION,
     ICON,
@@ -58,6 +57,10 @@ from .const import (
     VALIDATION_TUPLES,
     replace_none_str,
 )
+from .event_reader import get_events
+
+# import homeassistant.util.dt as dt_util
+
 
 # from collections import defaultdict
 
@@ -74,7 +77,7 @@ SCAN_INTERVAL = timedelta(seconds=10)
 
 
 # Keep a short domain version for the context instances (which can only be 36 chars)
-_DOMAIN_SHORT = "adapt_lgt"
+_DOMAIN_SHORT = "pres_sim"
 
 
 def _int_to_bytes(i: int, signed: bool = False) -> bytes:
@@ -95,8 +98,7 @@ def create_context(
     name: str, which: str, index: int, parent: Context | None = None
 ) -> Context:
     """Create a context that can identify this integration."""
-    # Use a hash for the name because otherwise the context might become
-    # too long (max len == 36) to fit in the database.
+    # Use a hash for the name to mitigate "max len == 36" issue to fit in the database.
     name_hash = _short_hash(name)
     # Pack index with base85 to maximize the number of contexts we can create
     # before we exceed the 36-character limit and are forced to wrap.
@@ -117,6 +119,7 @@ async def handle_apply(switch: PresenceSimulator, service_call: ServiceCall):
     """Handle the entity service apply."""
     # hass = switch.hass
     data = service_call.data
+
     # all_lights = data[CONF_LIGHTS]
     # if not all_lights:
     #     all_lights = switch._lights
@@ -232,7 +235,11 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         self._data = data
         self._name = data[CONF_NAME]
         self._interval = data[CONF_INTERVAL]
-        self._suto_filter = data[CONF_AUTOMATION_FILTER]
+
+        self._automations = data[CONF_AUTOMATIONS]
+        self._automations_filter = data[CONF_AUTOMATIONS_FILTER]
+        self._lights = data[CONF_LIGHTS]
+        self._lights_filter = data[CONF_LIGHTS_FILTER]
 
         # Set other attributes
         self._icon = ICON
@@ -244,6 +251,7 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
         self._off_to_on_event: dict[str, Event] = {}
         # Locks that prevent light adjusting when waiting for a light to 'turn_off'
         self._locks: dict[str, asyncio.Lock] = {}
+
         # To count the number of `Context` instances
         self._context_cnt: int = 0
 
@@ -314,8 +322,7 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
 
     def _remove_listeners(self) -> None:
         while self.remove_listeners:
-            self.remove_listeners.pop()  # remove_listener = self.remove_listeners.pop()
-            # remove_listener()
+            self.remove_listeners.pop()
 
     @property
     def icon(self) -> str:
@@ -370,7 +377,8 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
             return
         self._state = False
         self._remove_listeners()
-        # self.turn_on_off_listener.reset(*self._lights)
+
+    # self.turn_on_off_listener.reset(*self._lights)
 
     async def _async_update_at_interval(self, now=None) -> None:
         _LOGGER.debug(
@@ -381,48 +389,149 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
 
         days_back = 0
         current_utc = datetime.now(timezone.utc)
-        from_time_uts = dt_util.utc_to_timestamp(
-            current_utc + timedelta(days=-days_back, minutes=-1)
+        start_utc = current_utc + timedelta(days=-days_back, minutes=-10)
+        end_utc = current_utc + timedelta(days=-days_back, minutes=0)
+        # from_time_uts = dt_util.utc_to_timestamp(start_utc)
+        # to_time_uts = dt_util.utc_to_timestamp(end_utc)
+
+        history_list = await get_instance(self.hass).async_add_executor_job(
+            history.get_significant_states,
+            self.hass,
+            start_utc,  # start_time
+            end_utc,  # end_time
+            self._data[CONF_AUTOMATIONS],  # entity_ids: list[str]
+            None,  # self._data[CONF_AUTOMATIONS_FILTER],  # filters - alternative to id's
         )
-        to_time_uts = dt_util.utc_to_timestamp(
-            current_utc + timedelta(days=-days_back, minutes=0)
+        # history_list1 = await get_instance(self.hass).async_add_executor_job(
+        #     history.state_changes_during_period,
+        #     self.hass,
+        #     start_utc,
+        #     end_utc,
+        #     ",".join(self._data[CONF_AUTOMATIONS]),
+        # )
+        # _LOGGER.debug("history: %s", history_list)
+
+        for entity_id in history_list:
+            _LOGGER.debug("Entity %s", entity_id)
+            # launch an async task by entity_id
+            for state_change in history_list[entity_id]:
+                _LOGGER.debug("State change %s", state_change)
+            # hass.async_create_task(simulate_single_entity(entity_id, dic[entity_id], overridden_delta, overridden_random))
+
+        automation_list = await get_events(
+            self.hass,
+            start_utc,
+            end_utc,
+            [],
+            self._automations,
+            None,
         )
 
-        #   filter = self._settings.get
+        for row in automation_list:
+            entity_id = row["entity_id"]
+            when = dt_util.utc_from_timestamp(row["when"])
+            _LOGGER.debug("Automation %s was triggered: %s", entity_id, when)
+            # schedule task by automation_id
 
-        conn = sqlite3.connect(
-            f"{self.hass.config.config_dir}/home-assistant_v2.db",
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
-        )
-        cursor = conn.cursor()
+        # session = self.hass.data[DATA_INSTANCE].get_session()
+        # state1 = aliased(States)
+        # state2 = aliased(States)
 
-        # schema_version = _schema_version(hass)  # if schema_version >= 31:
-        result = cursor.execute(
-            "Select shared_data, time_fired_ts from event_data inner join events e on event_data.data_id = e.data_id \
-                where json_extract(shared_data, '$.entity_id') LIKE 'automation.%' \
-                AND time_fired_ts > ?\
-                AND time_fired_ts < ?",
-            [from_time_uts, to_time_uts],
-        )
+        # query = (
+        #     session.query(
+        #         state1.last_updated_ts,
+        #         state1.entity_id,
+        #         StateAttributes.shared_attrs,
+        #     )
+        #     .join(state2, state1.old_state_id == state2.state_id)
+        #     .filter(state1.entity_id in self._data[CONF_AUTOMATIONS])
+        #     .filter(state1.state != state2.state)
+        #     .filter(state1.state in ("on", "off"))
+        #     .filter(state1.last_updated_ts >= from_time_uts)
+        #     .filter(state1.last_updated_ts < to_time_uts)
+        #     .limit(10000)
+        # )
+
+        # query = (
+        #     session.query(
+        #         States.last_updated_ts,
+        #         States.entity_id,
+        #         StateAttributes.shared_attrs,
+        #     )
+        #     # .filter(States.entity_id in self._data[CONF_AUTOMATIONS])
+        #     .filter(States.last_updated_ts >= from_time_uts)
+        #     .filter(States.last_updated_ts < to_time_uts)
+        #     .limit(1)
+        # )
+        #        result1 = session.execute(query.statement)
+
+        # test = await query.count()
+        # # reslt = await self._hass.async_add_executor_job(self.update)
+        # # result = self.hass.data[DATA_INSTANCE].async_add_executor_job(query)
+
+        # if query.count() > 0:
+        #     _LOGGER.debug("NOT enabled")
+
+        # for row in query:
+        #     test = row[0]
+        #     time_fired = dt_util.utc_from_timestamp(time)
+        #     message = json.loads(shared_attrs)
+        #     if message["entity_id"] in self._data[CONF_AUTOMATIONS]:
+        #         _LOGGER.debug(
+        #             "%s: MATCH for , record is '%s'",
+        #             time_fired,
+        #             message,
+        #         )
+        #     # self.hass.async_create_task(simulate_single_entity(entity_id, dic[entity_id], overridden_delta, overridden_random))
+        #     else:
+        #         _LOGGER.debug(
+        #             "%s: NOT enabled '%s'",
+        #             time_fired,
+        #             message,
+        #         )
+
+        # result2 = (
+        #     session.query(Events.state, EventData.shared_data)
+        #     .filter(States.entity_id in self._data[CONF_AUTOMATIONS])
+        #     .filter(States.time_fired_ts >= from_time_uts)
+        #     .filter(States.time_fired_ts < to_time_uts)
+        #     # .limit(1)
+        # )
+
+        # conn = sqlite3.connect(
+        #     f"{self.hass.config.config_dir}/home-assistant_v2.db",
+        #     detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+        # )
+        # cursor = conn.cursor()
+
+        # # schema_version = _schema_version(hass)  # if schema_version >= 31:
+        # result = cursor.execute(
+        #     "Select shared_data, time_fired_ts from event_data inner join events e on event_data.data_id = e.data_id \
+        #         where json_extract(shared_data, '$.entity_id') LIKE 'automation.%' \
+        #         AND time_fired_ts > ?\
+        #         AND time_fired_ts < ?",
+        #     [from_time_uts, to_time_uts],
+        # )
 
         # {"domain":"automation","service":"trigger","service_data":{"entity_id":"automation.auto_licht_bad","skip_condition":true}}
         # shared_data like "%automation.%licht%" AND
 
-        for shared_data, time in result:
-            time_fired = dt_util.utc_from_timestamp(time)
-            message = json.loads(shared_data)
-            if message["entity_id"] in self._data[CONF_AUTOMATIONS]:
-                _LOGGER.debug(
-                    "%s: MATCH, record is '%s'",
-                    time_fired,
-                    message,
-                )
-            else:
-                _LOGGER.debug(
-                    "%s: NOT enabled '%s'",
-                    time_fired,
-                    message,
-                )
+        # for shared_data, time in result1:
+        #     time_fired = dt_util.utc_from_timestamp(time)
+        #     message = json.loads(shared_data)
+        #     if message["entity_id"] in self._data[CONF_AUTOMATIONS]:
+        #         _LOGGER.debug(
+        #             "%s: MATCH, record is '%s'",
+        #             time_fired,
+        #             message,
+        #         )
+        #     # self.hass.async_create_task(simulate_single_entity(entity_id, dic[entity_id], overridden_delta, overridden_random))
+        #     else:
+        #         _LOGGER.debug(
+        #             "%s: NOT enabled '%s'",
+        #             time_fired,
+        #             message,
+        #         )
 
         return
 
