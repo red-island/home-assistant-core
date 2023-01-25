@@ -49,7 +49,6 @@ from .const import (
     CONF_AUTOMATIONS_FILTER,
     CONF_INTERVAL,
     CONF_LIGHTS,
-    CONF_LIGHTS_FILTER,
     DOMAIN,
     EXTRA_VALIDATION,
     ICON,
@@ -233,13 +232,14 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
 
         data = validate(entry)
         self._data = data
-        self._name = data[CONF_NAME]
+        self._name: str = data[CONF_NAME]
         self._interval = data[CONF_INTERVAL]
+        self._last_run_end: datetime | None = None
 
-        self._automations = data[CONF_AUTOMATIONS]
-        self._automations_filter = data[CONF_AUTOMATIONS_FILTER]
-        self._lights = data[CONF_LIGHTS]
-        self._lights_filter = data[CONF_LIGHTS_FILTER]
+        self._automations: list[str] = data[CONF_AUTOMATIONS]
+        self._automations_filter: str | None = data[CONF_AUTOMATIONS_FILTER]
+        self._lights: list[str] = data[CONF_LIGHTS]
+        # self._lights_filter = data[CONF_LIGHTS_FILTER]
 
         # Set other attributes
         self._icon = ICON
@@ -382,40 +382,74 @@ class PresenceSimulator(SwitchEntity, RestoreEntity):
 
         days_back = 0
         current_utc = datetime.now(timezone.utc)
-        start_utc = current_utc + timedelta(days=-days_back, minutes=-10)
+
+        if self._last_run_end is None:
+            self._last_run_end = current_utc + timedelta(days=-days_back, minutes=-10)
+
+        start_utc = self._last_run_end
         end_utc = current_utc + timedelta(days=-days_back, minutes=0)
+
+        # if self._last_run_end is None:
+        self._last_run_end = end_utc
+
         # from_time_uts = dt_util.utc_to_timestamp(start_utc)
         # to_time_uts = dt_util.utc_to_timestamp(end_utc)
 
-        history_list = await get_instance(self.hass).async_add_executor_job(
-            history.get_significant_states,
-            self.hass,
-            start_utc,  # start_time
-            end_utc,  # end_time
-            self._data[CONF_AUTOMATIONS],  # TOD: CONF_LIGHTS
-            self._data[CONF_LIGHTS_FILTER],  # filters - alternative to id's
-        )
+        # Get all light/switch entities with state changes
+        if self._lights:
+            history_lights = await get_instance(self.hass).async_add_executor_job(
+                history.get_significant_states,
+                self.hass,
+                start_utc,  # start_time
+                end_utc,  # end_time
+                self._lights,
+                # filters=,
+            )
+            # Schedule state changes
+            for entity_id in history_lights:
+                _LOGGER.debug("Entity %s", entity_id)
+                # launch an async task by entity_id
+                for state_change in history_lights[entity_id]:
+                    if isinstance(state_change, history.State):
+                        last_changed = state_change.last_changed
+                        if last_changed > start_utc:
+                            _LOGGER.debug("State change %s", state_change)
+                            # hass.async_create_task(simulate_single_entity(entity_id, dic[entity_id], overridden_delta, overridden_random))
+                        else:
+                            _LOGGER.debug("State before start_date")
 
-        for entity_id in history_list:
-            _LOGGER.debug("Entity %s", entity_id)
-            # launch an async task by entity_id
-            for state_change in history_list[entity_id]:
-                _LOGGER.debug("State change %s", state_change)
-            # hass.async_create_task(simulate_single_entity(entity_id, dic[entity_id], overridden_delta, overridden_random))
+        # Get all triggered automations
+        if self._automations:
+            automation_list = await get_events(
+                self.hass,
+                start_utc,
+                end_utc,
+                self._automations,
+                None,
+            )
+            # Schedule automation triggers
+            for row in automation_list:
+                entity_id = row.get("entity_id")
+                when = dt_util.utc_from_timestamp(row.get("when"))
+                message = row.get("message")
+                source = row.get("source")
+                _LOGGER.debug(
+                    "Automation %s was triggered: %s from %s with '%s' message",
+                    entity_id,
+                    when,
+                    source,
+                    message,
+                )
+                if self._automations_filter is not None:
+                    if self._automations_filter in message:
+                        _LOGGER.debug("Filter match")
+                    else:
+                        _LOGGER.debug("No match")
+                        return  # does not match to the filter, so do nothing
+                else:
+                    _LOGGER.debug("No filter set")
 
-        automation_list = await get_events(
-            self.hass,
-            start_utc,
-            end_utc,
-            self._automations,
-            None,
-        )
-
-        for row in automation_list:
-            entity_id = row["entity_id"]
-            when = dt_util.utc_from_timestamp(row["when"])
-            _LOGGER.debug("Automation %s was triggered: %s", entity_id, when)
-            # schedule task by automation_id
+                # schedule task by automation_id
 
         return
 

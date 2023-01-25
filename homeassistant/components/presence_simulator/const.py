@@ -11,17 +11,19 @@ import homeassistant.helpers.config_validation as cv
 DOMAIN: Final = "presence_simulator"
 ICON = "mdi:theme-light-dark"
 NONE_STR = "None"
+CONF_NAME, DEFAULT_NAME = "name", "default"
 
-CONF_LIGHTS, DEFAULT_LIGHTS = "lights", [str]
-CONF_AUTOMATIONS, DEFAULT_AUTOMATIONS = "automations", [str]
+CONF_LIGHTS = "lights"
+DEFAULT_LIGHTS: list[str] = []
+CONF_AUTOMATIONS = "automations"
+DEFAULT_AUTOMATIONS: list[str] = []
 CONF_INTERVAL, DEFAULT_INTERVAL = "interval", 10
 CONF_PLAYBACK_AUTOMATIONS, DEFAULT_PLAYBACK_AUTOMATIONS = "playback_automation", True
 CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS = "playback_days", 7
-CONF_AUTOMATIONS_FILTER, DEFAULT_AUTOMATIONS_FILTER = (
-    "automation_filter",
-    "%zigbee2mqtt/Feller%",
-)
+CONF_AUTOMATIONS_FILTER, DEFAULT_AUTOMATIONS_FILTER = ("automation_filter", None)
 CONF_LIGHTS_FILTER, DEFAULT_LIGHTS_FILTER = "lights_filter", ""  # "automation_filter"
+
+#     "%zigbee2mqtt/Feller%",
 
 
 def int_between(min_int, max_int):
@@ -31,10 +33,10 @@ def int_between(min_int, max_int):
 
 VALIDATION_TUPLES = [
     #    (CONF_PLAYBACK_AUTOMATIONS, CONF_PLAYBACK_AUTOMATIONS, cv.boolean),
-    (CONF_AUTOMATIONS, DEFAULT_AUTOMATIONS, cv.entity_ids),
-    (CONF_AUTOMATIONS_FILTER, DEFAULT_AUTOMATIONS_FILTER, cv.string),
-    (CONF_LIGHTS, DEFAULT_LIGHTS, cv.entity_ids),
-    (CONF_LIGHTS_FILTER, DEFAULT_LIGHTS_FILTER, cv.string),
+    (CONF_AUTOMATIONS, [], cv.entity_ids),
+    (CONF_AUTOMATIONS_FILTER, NONE_STR, cv.string),
+    (CONF_LIGHTS, [], cv.entity_ids),
+    # (CONF_LIGHTS_FILTER, DEFAULT_LIGHTS_FILTER, cv.string),
     (CONF_PLAYBACK_DAYS, DEFAULT_PLAYBACK_DAYS, int_between(1, 14)),
     (CONF_INTERVAL, DEFAULT_INTERVAL, cv.positive_int),
 ]
@@ -64,3 +66,24 @@ EXTRA_VALIDATION = {
     # CONF_SUNSET_TIME: (cv.time, str),
     # CONF_MIN_SUNSET_TIME: (cv.time, str),
 }
+
+
+def maybe_coerce(key, validation):
+    """Coerce the validation into a json serializable type."""
+    validation, coerce = EXTRA_VALIDATION.get(key, (validation, None))
+    if coerce is not None:
+        return vol.All(validation, vol.Coerce(coerce))
+    return validation
+
+
+_yaml_validation_tuples = [
+    (key, default, maybe_coerce(key, validation))
+    for key, default, validation in VALIDATION_TUPLES
+] + [(CONF_NAME, DEFAULT_NAME, cv.string)]
+
+_DOMAIN_SCHEMA = vol.Schema(
+    {
+        vol.Optional(key, default=replace_none_str(default, vol.UNDEFINED)): validation
+        for key, default, validation in _yaml_validation_tuples
+    }
+)

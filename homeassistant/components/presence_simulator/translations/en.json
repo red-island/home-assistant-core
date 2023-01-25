@@ -30,7 +30,7 @@
                     "interval": "interval - Run every x seconds",
                     "playback_automation": "playback_automation - Shall past automations be played back",
                     "playback_days": "playback_days - which day in the past shall be re-played",
-                    "automation_filter": "automation_filter - which character need to exist in automation name e.g. %light*"
+                    "automation_filter": "automation_filter - which character need to exist in automation message e.g. mqtt - use None to whipe"
                 }
             },
             "error": {
