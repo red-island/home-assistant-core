@@ -20,12 +20,13 @@ async def get_events(
     hass: HomeAssistant,
     start_time: dt,
     end_time: dt,
-    device_ids: list[str],
+    # device_ids: list[str],
     entity_ids: list[str],
     context_id: str | None,
 ):
     """Handle logbook get events command."""
 
+    device_ids: list[str] = []
     utc_now = dt_util.utcnow()
 
     if start_time > utc_now:

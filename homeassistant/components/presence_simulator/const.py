@@ -21,7 +21,7 @@ CONF_AUTOMATIONS_FILTER, DEFAULT_AUTOMATIONS_FILTER = (
     "automation_filter",
     "%zigbee2mqtt/Feller%",
 )
-CONF_LIGHTS_FILTER, DEFAULT_LIGHTS_FILTER = "light_filter", ""  # "automation_filter"
+CONF_LIGHTS_FILTER, DEFAULT_LIGHTS_FILTER = "lights_filter", ""  # "automation_filter"
 
 
 def int_between(min_int, max_int):
